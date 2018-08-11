@@ -61,9 +61,14 @@ namespace PrinterPortRemapper
 
         static void Main(string[] args)
         {
+            Logger.Log("----");
+            Logger.Log("Program log start: " + DateTime.Now);
+            Logger.Log("Machine name: " + Environment.MachineName);
+            Logger.Log("User name: " + Environment.UserName);
+
             PortMap = LoadPortMap();
             bool changes = false;
-            Console.WriteLine("Enumerating printers and processing known ports\n---");
+            Logger.Log("Enumerating and processing printers.\n---");
             foreach (string s in GetPrinters())
             {
                 changes |= EvaluatePrinter(s);
@@ -72,12 +77,13 @@ namespace PrinterPortRemapper
             if (changes)
                 RestartSpooler();
 
+            Logger.Cleanup();
             Console.ReadLine();
         }
 
         static Dictionary<string, PortProcessor> LoadPortMap()
         {
-            Console.WriteLine("---\nEnumerating known ports");
+            Logger.Log("---\nEnumerating known port types");
             Dictionary<String, PortProcessor> PortMap = new Dictionary<string, PortProcessor>();
 
             RegistryKey r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors");
@@ -92,14 +98,14 @@ namespace PrinterPortRemapper
                     {
                         foreach (String p in kid.GetSubKeyNames())
                         {
-                            Console.WriteLine("Found Standard TCP/IP port: " + p);
+                            Logger.Log("Found Standard TCP/IP port: " + p);
                             PortMap[p] = new PortProcessor(StandardPort);
                         }
                     }
                 } 
                 
             }
-            Console.WriteLine("---");
+            Logger.Log("---");
             return PortMap;
         }
 
@@ -112,43 +118,43 @@ namespace PrinterPortRemapper
 
         static void RestartSpooler()
         {
-            Console.WriteLine("Restarting the print spooler");
+            Logger.Log("Restarting the print spooler");
             ServiceController service = new ServiceController("Spooler");
             TimeSpan timeout = TimeSpan.FromMilliseconds(30000);
 
             service.Stop();
             service.WaitForStatus(ServiceControllerStatus.Stopped, timeout);
             service.Start();
-            Console.WriteLine("Restart of spooler is complete.");
+            Logger.Log("Restart of spooler is complete.");
         }
 
         static bool EvaluatePrinter(string s)
         {
             RegistryKey cc = Registry.LocalMachine.OpenSubKey(BASE + "\\" + s, true);
-            Console.WriteLine("Name: " + cc.GetValue("Name"));
+            Logger.Log("Name: " + cc.GetValue("Name"));
             string port = cc.GetValue("Port").ToString();
-            Console.WriteLine("Port Name: " + port);
+            Logger.Log("Port Name: " + port);
             PortStatus res = EvaluatePrinterPort(port);
             if (res != null && res.Changed && res.NewName != null)
             {
-                Console.WriteLine("The printer port name has changed. Changing port name from " + port + " to " + res.NewName);
+                Logger.Log("The printer port name has changed. Changing port name from " + port + " to " + res.NewName);
                 cc.SetValue("Port", res.NewName);
             }
 
-            Console.WriteLine("----");
+            Logger.Log("----");
             return res != null && res.Changed;
         }
 
         static PortStatus WSDPort(string s)
         {
-            Console.WriteLine("Processing " + s + " as a WSD port.");
+            Logger.Log("Processing " + s + " as a WSD port.");
             String guid;
             PortStatus res = new PortStatus();
             RegistryKey r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Enum\\SWD\\PRINTENUM\\" + s);
             if (r != null && r.GetValue("ContainerID") != null) {
                 guid = r.GetValue("ContainerID").ToString();
                 guid = guid.Substring(1, guid.Length - 2);
-                Console.WriteLine("ContainerID is " + guid);
+                Logger.Log("ContainerID is " + guid);
                 r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Enum\\SWD\\DAFWSDProvider");
                 if (r != null)
                 {
@@ -156,7 +162,7 @@ namespace PrinterPortRemapper
                     {
                         if (n.StartsWith("urn:uuid:"+guid))
                         {
-                            Console.WriteLine(n + " matches the WSD set.");
+                            Logger.Log(n + " matches the WSD set.");
                             RegistryKey kid = r.OpenSubKey(n, true);
                             String loc = kid.GetValue("LocationInformation").ToString();
                             Uri u = new Uri(loc);
@@ -165,7 +171,7 @@ namespace PrinterPortRemapper
                                 if (host != null)
                                 {
                                     String newloc = loc.Replace(ip.ToString(), host);
-                                    Console.WriteLine("Changing URL from " + loc + " to " + newloc);
+                                    Logger.Log("Changing URL from " + loc + " to " + newloc);
                                     kid.SetValue("LocationInformation", newloc);
                                     res.Changed = true;
                                 }
@@ -180,7 +186,7 @@ namespace PrinterPortRemapper
 
         static PortStatus StandardPort(string s)
         {
-            Console.WriteLine("Processing " + s + " as a Standard TCP/IP port.");
+            Logger.Log("Processing " + s + " as a Standard TCP/IP port.");
 
             RegistryKey r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\Standard TCP/IP Port\\Ports\\" + s, true);
 
@@ -193,9 +199,9 @@ namespace PrinterPortRemapper
                     if (host != null)
                     {
                         r.SetValue("HostName", host);
-                        Console.WriteLine("Changing hostname from " + val + " to " + host);
+                        Logger.Log("Changing hostname from " + val + " to " + host);
                         string nn = GetHostname(host);
-                        r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\Standard TCP/IP Port\\Ports\\",true);
+                        r = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors\\Standard TCP/IP Port\\Ports",true);
                         RenameSubKey(r, s, nn);
                         return new PortStatus(true, nn);
                     }
@@ -216,8 +222,6 @@ namespace PrinterPortRemapper
                 {
                    return PortMap[s](s);
                 }
-                 else 
-                    Console.WriteLine("Don't know how to deal with port " + s);
             }
 
             return null;
@@ -237,7 +241,7 @@ namespace PrinterPortRemapper
                 return hostInfo.HostName;
             } else
             {
-                Console.WriteLine("Unable to find a hostname for " + ip);
+                Logger.Log("Unable to find a hostname for " + ip);
             }
             return null;
         }
