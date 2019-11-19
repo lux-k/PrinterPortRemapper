@@ -11,7 +11,7 @@ namespace PrinterPortRemapper
         private static StreamWriter sw = null;
         private static void Init()
         {
-            sw = new StreamWriter(Path.GetDirectoryName(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)) + "\\printer-remapper.txt", true);
+            sw = new StreamWriter("C:\\printer-remapper.txt", true);
         }
 
         public static void Log(string s)
